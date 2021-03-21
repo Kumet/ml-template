@@ -1,11 +1,13 @@
 import logging
 import os
-import mlflow
+
 import hydra
+import mlflow
 import numpy as np
 import torch
-from omegaconf import DictConfig
 from hydra import utils
+from omegaconf import DictConfig
+
 from src.logger import MlflowWriter
 from src.trainer import Trainer
 from src.utils import instantiate

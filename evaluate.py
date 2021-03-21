@@ -1,15 +1,17 @@
 import logging
-import torch
-import hydra
-from omegaconf import OmegaConf
-from tqdm import tqdm
-from src.utils import instantiate
 
+import hydra
+import torch
+from omegaconf import OmegaConf, DictConfig
+from tqdm import tqdm
+
+from src.utils import instantiate
 
 logger = logging.getLogger('evaluate')
 
+
 @hydra.main(config_path='conf', config_name='evaluate')
-def main(config):
+def main(config: DictConfig):
     logger.info('Loading checkpoint: {} ...'.format(config.checkpoint))
     checkpoint = torch.load(config.checkpoint)
 
