@@ -1,20 +1,35 @@
 import logging
+
 import torch
 from torchvision.utils import make_grid
-from .base import BaseTrainer
-from src.utils import inf_loop
-from src.logger import BatchMetrics
-import mlflow
 
-logger = logging.getLogger('trainer')
+from src.logger import BatchMetrics
+from src.utils import inf_loop
+
+from .base import BaseTrainer
+
+logger = logging.getLogger("trainer")
+
 
 class Trainer(BaseTrainer):
     """
     Trainer class
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config, data_loader,
-                 valid_data_loader=None, lr_scheduler=None, len_epoch=None):
-        super().__init__(model, criterion, metric_ftns, optimizer, config)
+
+    def __init__(
+        self,
+        model,
+        criterion,
+        metric_ftns,
+        optimizer,
+        config,
+        data_loader,
+        mlflow_writer,
+        valid_data_loader=None,
+        lr_scheduler=None,
+        len_epoch=None,
+    ):
+        super().__init__(model, criterion, metric_ftns, optimizer, config, mlflow_writer)
         self.config = config
         self.data_loader = data_loader
         if len_epoch is None:
@@ -27,8 +42,12 @@ class Trainer(BaseTrainer):
         self.valid_data_loader = valid_data_loader
         self.lr_scheduler = lr_scheduler
 
-        self.train_metrics = BatchMetrics('loss', *[m.__name__ for m in self.metric_ftns], postfix='/train', writer=self.writer)
-        self.valid_metrics = BatchMetrics('loss', *[m.__name__ for m in self.metric_ftns], postfix='/valid', writer=self.writer)
+        self.train_metrics = BatchMetrics(
+            "loss", *[m.__name__ for m in self.metric_ftns], postfix="/train", writer=self.writer
+        )
+        self.valid_metrics = BatchMetrics(
+            "loss", *[m.__name__ for m in self.metric_ftns], postfix="/valid", writer=self.writer
+        )
 
     def _train_epoch(self, epoch):
         """
@@ -49,19 +68,14 @@ class Trainer(BaseTrainer):
             loss.backward()
             self.optimizer.step()
 
-            mlflow.log_metric('loss', loss.item())
-
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-            self.train_metrics.update('loss', loss.item())
+            self.train_metrics.update("loss", loss.item())
 
             if batch_idx % self.log_step == 0:
-                self.writer.add_image('train/input', make_grid(data.cpu(), nrow=8, normalize=True))
+                self.writer.add_image("train/input", make_grid(data.cpu(), nrow=8, normalize=True))
                 for met in self.metric_ftns:
                     self.train_metrics.update(met.__name__, met(output, target))
-                logger.info('Train Epoch: {} {} Loss: {:.6f}'.format(
-                    epoch,
-                    self._progress(batch_idx),
-                    loss.item()))
+                logger.info("Train Epoch: {} {} Loss: {:.6f}".format(epoch, self._progress(batch_idx), loss.item()))
 
             if batch_idx == self.len_epoch:
                 break
@@ -77,7 +91,7 @@ class Trainer(BaseTrainer):
         # add result metrics on entire epoch to tensorboard
         self.writer.set_step(epoch)
         for k, v in log.items():
-            self.writer.add_scalar(k+'/epoch', v)
+            self.writer.add_scalar(k + "/epoch", v)
         return log
 
     def _valid_epoch(self, epoch):
@@ -97,18 +111,19 @@ class Trainer(BaseTrainer):
                 loss = self.criterion(output, target)
 
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx)
-                self.writer.add_image('valid/input', make_grid(data.cpu(), nrow=8, normalize=True))
-                self.valid_metrics.update('loss', loss.item())
+                self.writer.add_image("valid/input", make_grid(data.cpu(), nrow=8, normalize=True))
+                self.valid_metrics.update("loss", loss.item())
                 for met in self.metric_ftns:
                     self.valid_metrics.update(met.__name__, met(output, target))
 
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
+            self.writer.add_histogram(name, p, bins="auto")
+
         return self.valid_metrics.result()
 
     def _progress(self, batch_idx):
-        base = '[{}/{} ({:.0f}%)]'
+        base = "[{}/{} ({:.0f}%)]"
         try:
             # epoch-based training
             total = len(self.data_loader.dataset)

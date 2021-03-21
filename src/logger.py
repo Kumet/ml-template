@@ -1,14 +1,19 @@
-import os
 import logging
-import pandas as pd
-from itertools import product
-from torch.utils.tensorboard import SummaryWriter
+import os
 from datetime import datetime
+from itertools import product
+
+import mlflow
+import pandas as pd
+from mlflow import pytorch
+from mlflow.tracking import MlflowClient
+from omegaconf import DictConfig, ListConfig
+from torch.utils.tensorboard import SummaryWriter
+
+logger = logging.getLogger("logger")
 
 
-logger = logging.getLogger('logger')
-
-class TensorboardWriter():
+class TensorboardWriter:
     def __init__(self, log_dir, enabled):
         self.writer = SummaryWriter(log_dir) if enabled else None
         self.selected_module = ""
@@ -19,8 +24,15 @@ class TensorboardWriter():
         self.step = 0
 
         self.tb_writer_ftns = {
-            'add_scalar', 'add_scalars', 'add_image', 'add_images', 'add_audio',
-            'add_text', 'add_histogram', 'add_pr_curve', 'add_embedding'
+            "add_scalar",
+            "add_scalars",
+            "add_image",
+            "add_images",
+            "add_audio",
+            "add_text",
+            "add_histogram",
+            "add_pr_curve",
+            "add_embedding",
         }
         self.timer = datetime.now()
 
@@ -30,7 +42,7 @@ class TensorboardWriter():
             self.timer = datetime.now()
         else:
             duration = datetime.now() - self.timer
-            self.add_scalar('steps_per_sec', 1 / duration.total_seconds())
+            self.add_scalar("steps_per_sec", 1 / duration.total_seconds())
             self.timer = datetime.now()
 
     def __getattr__(self, name):
@@ -46,18 +58,20 @@ class TensorboardWriter():
             def wrapper(tag, data, *args, **kwargs):
                 if add_data is not None:
                     add_data(tag, data, self.step, *args, **kwargs)
+
             return wrapper
         else:
             attr = getattr(self.writer, name)
             return attr
 
+
 class BatchMetrics:
-    def __init__(self, *keys, postfix='', writer=None):
+    def __init__(self, *keys, postfix="", writer=None):
         self.writer = writer
         self.postfix = postfix
         if postfix:
-            keys = [k+postfix for k in keys]
-        self._data = pd.DataFrame(index=keys, columns=['total', 'counts', 'average'])
+            keys = [k + postfix for k in keys]
+        self._data = pd.DataFrame(index=keys, columns=["total", "counts", "average"])
         self.reset()
 
     def reset(self):
@@ -81,40 +95,43 @@ class BatchMetrics:
     def result(self):
         return dict(self._data.average)
 
+
 class EpochMetrics:
-    def __init__(self, metric_names, phases=('train', 'valid'), monitoring='off'):
+    def __init__(self, metric_names, phases=("train", "valid"), monitoring="off"):
         # setup pandas DataFrame with hierarchical columns
         columns = tuple(product(metric_names, phases))
-        self._data = pd.DataFrame(columns=columns) # TODO: add epoch duration
+        self._data = pd.DataFrame(columns=columns)  # TODO: add epoch duration
         self.monitor_mode, self.monitor_metric = self._parse_monitoring_mode(monitoring)
         self.topk_idx = []
 
     def minimizing_metric(self, idx):
-        if self.monitor_mode == 'off':
+        if self.monitor_mode == "off":
             return 0
         try:
             metric = self._data[self.monitor_metric].loc[idx]
         except KeyError:
-            logger.warning("Warning: Metric '{}' is not found. "
-                           "Model performance monitoring is disabled.".format(self.monitor_metric))
-            self.monitor_mode = 'off'
+            logger.warning(
+                "Warning: Metric '{}' is not found. "
+                "Model performance monitoring is disabled.".format(self.monitor_metric)
+            )
+            self.monitor_mode = "off"
             return 0
-        if self.monitor_mode == 'min':
+        if self.monitor_mode == "min":
             return metric
         else:
-            return - metric
+            return -metric
 
     def _parse_monitoring_mode(self, monitor_mode):
-        if monitor_mode == 'off':
-            return 'off', None
+        if monitor_mode == "off":
+            return "off", None
         else:
             monitor_mode, monitor_metric = monitor_mode.split()
-            monitor_metric = tuple(monitor_metric.split('/'))
-            assert monitor_mode in ['min', 'max']
+            monitor_metric = tuple(monitor_metric.split("/"))
+            assert monitor_mode in ["min", "max"]
         return monitor_mode, monitor_metric
 
     def is_improved(self):
-        if self.monitor_mode == 'off':
+        if self.monitor_mode == "off":
             return True
 
         last_epoch = self._data.index[-1]
@@ -125,21 +142,21 @@ class EpochMetrics:
         """
         Keep top-k checkpoints by deleting k+1'th best epoch index from dataframe for every epoch.
         """
-        if len(self.topk_idx) > k and self.monitor_mode != 'off':
+        if len(self.topk_idx) > k and self.monitor_mode != "off":
             last_epoch = self._data.index[-1]
-            self.topk_idx = self.topk_idx[:(k+1)]
+            self.topk_idx = self.topk_idx[: (k + 1)]
             if last_epoch not in self.topk_idx:
                 to_delete = last_epoch
             else:
                 to_delete = self.topk_idx[-1]
 
             # delete checkpoint having out-of topk metric
-            filename = str(checkpt_dir / 'checkpoint-epoch{}.pth'.format(to_delete.split('-')[1]))
+            filename = str(checkpt_dir / "checkpoint-epoch{}.pth".format(to_delete.split("-")[1]))
             os.remove(filename)
 
     def update(self, epoch, result):
-        epoch_idx = f'epoch-{epoch}'
-        self._data.loc[epoch_idx] = {tuple(k.split('/')):v for k, v in result.items()}
+        epoch_idx = f"epoch-{epoch}"
+        self._data.loc[epoch_idx] = {tuple(k.split("/")): v for k, v in result.items()}
 
         self.topk_idx.append(epoch_idx)
         self.topk_idx = sorted(self.topk_idx, key=self.minimizing_metric)
@@ -152,3 +169,45 @@ class EpochMetrics:
 
     def __str__(self):
         return str(self._data)
+
+
+class MlflowWriter:
+    def __init__(self, experiment_name, **kwargs):
+        self.client = MlflowClient(**kwargs)
+        try:
+            self.experiment_id = self.client.create_experiment(experiment_name)
+        except:
+            self.experiment_id = self.client.get_experiment_by_name(experiment_name).experiment_id
+
+        self.run_id = self.client.create_run(self.experiment_id).info.run_id
+
+    def log_params_from_omegaconf_dict(self, params):
+        for param_name, element in params.items():
+            self._explore_recursive(param_name, element)
+
+    def _explore_recursive(self, parent_name, element):
+        if isinstance(element, DictConfig):
+            for k, v in element.items():
+                if isinstance(v, DictConfig) or isinstance(v, ListConfig):
+                    self._explore_recursive(f"{parent_name}.{k}", v)
+                else:
+                    self.client.log_param(self.run_id, f"{parent_name}.{k}", v)
+        elif isinstance(element, ListConfig):
+            for i, v in enumerate(element):
+                self.client.log_param(self.run_id, f"{parent_name}.{i}", v)
+
+    def log_torch_model(self, model):
+        with mlflow.start_run(self.run_id):
+            pytorch.log_model(model, "models")
+
+    def log_param(self, key, value):
+        self.client.log_param(self.run_id, key, value)
+
+    def log_metric(self, key, value):
+        self.client.log_metric(self.run_id, key, value)
+
+    def log_artifact(self, local_path):
+        self.client.log_artifact(self.run_id, local_path)
+
+    def set_terminated(self):
+        self.client.set_terminated(self.run_id)

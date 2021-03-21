@@ -4,14 +4,12 @@ from itertools import repeat
 from pathlib import Path
 
 import hydra
-import mlflow
 import yaml
-from omegaconf import DictConfig, ListConfig
 from omegaconf import OmegaConf
 
 
 def inf_loop(data_loader):
-    ''' wrapper function for endless data loader. '''
+    """ wrapper function for endless data loader. """
     for loader in repeat(data_loader):
         yield from loader
 
@@ -22,18 +20,18 @@ def instantiate(config, *args, is_func=False, **kwargs):
     1. return None if config.class is None
     2. return function handle if is_func is True
     """
-    assert '_target_' in config, f'Config should have \'_target_\' for class instantiation.'
-    target = config['_target_']
+    assert "_target_" in config, f"Config should have '_target_' for class instantiation."
+    target = config["_target_"]
     if target is None:
         return None
     if is_func:
         # get function handle
-        modulename, funcname = target.rsplit('.', 1)
+        modulename, funcname = target.rsplit(".", 1)
         mod = import_module(modulename)
         func = getattr(mod, funcname)
 
         # make partial function with arguments given in config, code
-        kwargs.update({k: v for k, v in config.items() if k != '_target_'})
+        kwargs.update({k: v for k, v in config.items() if k != "_target_"})
         partial_func = partial(func, *args, **kwargs)
 
         # update original function's __name__ and __doc__ to partial function
@@ -43,7 +41,7 @@ def instantiate(config, *args, is_func=False, **kwargs):
 
 
 def write_yaml(content, fname):
-    with fname.open('wt') as handle:
+    with fname.open("wt") as handle:
         yaml.dump(content, handle, indent=2, sort_keys=False)
 
 
@@ -52,20 +50,3 @@ def write_conf(config, save_path):
     save_path.parent.mkdir(parents=True, exist_ok=True)
     config_dict = OmegaConf.to_container(config, resolve=True)
     write_yaml(config_dict, save_path)
-
-
-def log_params_from_omegaconf_dict(params):
-    for param_name, element in params.items():
-        _explore_recursive(param_name, element)
-
-
-def _explore_recursive(parent_name, element):
-    if isinstance(element, DictConfig):
-        for k, v in element.items():
-            if isinstance(v, DictConfig) or isinstance(v, ListConfig):
-                _explore_recursive(f'{parent_name}.{k}', v)
-            else:
-                mlflow.log_param(f'{parent_name}.{k}', v)
-    elif isinstance(element, ListConfig):
-        for i, v in enumerate(element):
-            mlflow.log_param(f'{parent_name}.{i}', v)

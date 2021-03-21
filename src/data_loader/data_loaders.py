@@ -3,18 +3,11 @@ from torchvision import datasets, transforms
 
 
 def get_data_loaders(data_dir, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True):
-    trsfm = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
+    trsfm = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
     dataset = datasets.FashionMNIST(data_dir, train=training, download=True, transform=trsfm)
 
-    loader_args = {
-        'batch_size': batch_size,
-        'shuffle': shuffle,
-        'num_workers': num_workers
-    }
+    loader_args = {"batch_size": batch_size, "shuffle": shuffle, "num_workers": num_workers}
     if training:
         # split dataset into train and validation set
         num_total = len(dataset)
@@ -27,8 +20,6 @@ def get_data_loaders(data_dir, batch_size, shuffle=True, validation_split=0.0, n
         num_train = num_total - num_valid
 
         train_dataset, valid_dataset = random_split(dataset, [num_train, num_valid])
-        return DataLoader(train_dataset, **loader_args), \
-               DataLoader(valid_dataset, **loader_args)
+        return DataLoader(train_dataset, **loader_args), DataLoader(valid_dataset, **loader_args)
     else:
         return DataLoader(dataset, **loader_args)
-
