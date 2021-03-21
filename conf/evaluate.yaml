@@ -1,0 +1,12 @@
+log_dir: ${name}/
+checkpoint: outputs/train/2021-03-22/06-02-53/models/model_best.pth
+
+metrics:
+  - _target_: src.model.metric.accuracy
+  - _target_: src.model.metric.top_k_acc
+
+defaults:
+  - data: mnist_test
+
+  - hydra/job_logging : custom
+  - hydra/run/dir: no_chdir
