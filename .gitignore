@@ -114,3 +114,6 @@ __MACOSX/
 # mlflow
 mlruns/
 multirun/
+
+# hydra
+outputs/
