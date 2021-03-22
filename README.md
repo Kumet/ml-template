@@ -3,7 +3,8 @@ mlflow + hydra
 
 ## Setup
 ```bash
-pip install -r requirements.txt
+sh docker/build.sh
+sh docker/run.sh
 ```
 
 ## Commands
