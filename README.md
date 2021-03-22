@@ -9,7 +9,11 @@ pip install -r requirements.txt
 ## Commands
 ```bash
 python train.py  # 学習
+
 python train.py resume=outpu/train/path/to/checkpoint.pth  # チェックポイントから再開
+
+python train.py -m 'optimizer.lr=choice(0.1, 0.001, 0.0001)  # optuna
+
 mlflow ui  # mlflow
 tensorboard --logdir outputs/train/  # tensorboard
 

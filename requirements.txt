@@ -8,3 +8,4 @@ hydra-core>=1.0.3
 tqdm
 tensorboard>=1.14
 mlflow==1.14.1
+hydra-optuna-sweeper==0.9.0rc2

@@ -116,6 +116,8 @@ class BaseTrainer(metaclass=ABCMeta):
             # divider ===
             logger.info("=" * max_line_width)
 
+        return result
+
     def _prepare_device(self, n_gpu_use):
         """
         setup GPU device if available, move model into configured device

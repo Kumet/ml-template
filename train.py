@@ -53,13 +53,16 @@ def main(config: DictConfig):
                       valid_data_loader=valid_data_loader,
                       mlflow_writer=mlflow_writer,
                       lr_scheduler=lr_scheduler)
-    trainer.train()
+    result = trainer.train()
 
     mlflow_writer.log_artifact(os.path.join(os.getcwd(), '.hydra/config.yaml'))
     mlflow_writer.log_artifact(os.path.join(os.getcwd(), '.hydra/hydra.yaml'))
     mlflow_writer.log_artifact(os.path.join(os.getcwd(), '.hydra/overrides.yaml'))
     mlflow_writer.log_artifact(os.path.join(os.getcwd(), 'train.log'))
     mlflow_writer.set_terminated()
+
+    return result['accuracy/valid']
+
 
 
 if __name__ == '__main__':

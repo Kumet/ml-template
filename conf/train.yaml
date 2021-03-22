@@ -1,7 +1,7 @@
 log_dir: ${name}/
 resume:
 
-experiment_name: MnistExample
+experiment_name: OptunaTest
 
 metrics:
   - _target_: src.model.metric.accuracy
@@ -16,3 +16,16 @@ defaults:
 
   - hydra/job_logging : custom
   - hydra/run/dir: job_timestamp
+  - hydra/sweeper: optuna
+
+
+hydra:
+  sweeper:
+    optuna_config:
+      direction: maximize
+      study_name: optuna_test
+      storage: null
+      n_trials: 5
+      n_jobs: 1
+      sampler: tpe
+      seed: 123
